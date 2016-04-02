@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Arch">
+      <UniqueIdentifier>{30d05a68-a995-4f41-ac57-de16e20987ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Arch\Intel">
+      <UniqueIdentifier>{daafa54b-6bdf-479b-be72-477b03412b60}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Hooks">
+      <UniqueIdentifier>{1662f82a-32cd-4b8d-9849-97abc733d7e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Include">
+      <UniqueIdentifier>{8d3a60c9-8a12-4dea-849b-37a46d4f4206}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Util">
+      <UniqueIdentifier>{246ebd27-0940-4ae5-b209-505b024abf77}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Test">
+      <UniqueIdentifier>{ac69e16f-97dd-492f-917d-9d12f36d87c3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{f618b382-0209-4b3f-a57c-9ebc5f675f37}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\Arch\Intel\EPT.c">
+      <Filter>Arch\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Arch\Intel\VMX.c">
+      <Filter>Arch\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Arch\Intel\VmxExitHandlers.c">
+      <Filter>Arch\Intel</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\HVM.c">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Hooks\PageHook.c">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Hooks\SyscallHook.c">
+      <Filter>Hooks</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Test\Tests.c">
+      <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Util\Utils.c">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Util\LDasm.c">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="src\HyperBone.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\Arch\Intel\EPT.h">
+      <Filter>Arch\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Arch\Intel\VMCS.h">
+      <Filter>Arch\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Arch\Intel\VMX.h">
+      <Filter>Arch\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Arch\Intel\VmxEvent.h">
+      <Filter>Arch\Intel</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\HVM.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Hooks\PageHook.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Hooks\SyscallHook.h">
+      <Filter>Hooks</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Include\Common.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Include\CPU.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Include\Native.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Include\PE.h">
+      <Filter>Include</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Test\Tests.h">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Util\LDasm.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Util\Utils.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="src\Arch\Intel\VMXa.asm">
+      <Filter>Arch\Intel</Filter>
+    </MASM>
+    <MASM Include="src\Hooks\Syscall.asm">
+      <Filter>Hooks</Filter>
+    </MASM>
+  </ItemGroup>
+</Project>
