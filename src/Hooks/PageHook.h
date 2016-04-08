@@ -7,6 +7,11 @@ typedef enum _PAGE_TYPE
     CODE_PAGE = 1,
 } PAGE_TYPE;
 
+typedef enum _HOOK_TYPE
+{
+    HOOK_SWAP,              // Simple Data/Code page swap upon read access
+    HOOK_SPLIT,             // EPT TLB splitting
+} HOOK_TYPE;
 
 typedef struct _PAGE_HOOK_ENTRY
 {
@@ -16,6 +21,7 @@ typedef struct _PAGE_HOOK_ENTRY
     ULONG64 DataPagePFN;    // Data page PFN
     PVOID CodePageVA;       // Executable page VA
     ULONG64 CodePagePFN;    // Executable page PFN
+    HOOK_TYPE Type;         // Type of page swap
     ULONG OriginalSize;     // Size of original data
     UCHAR OriginalData[80]; // Original bytes + jump
 } PAGE_HOOK_ENTRY, *PPAGE_HOOK_ENTRY;
@@ -25,8 +31,9 @@ typedef struct _PAGE_HOOK_ENTRY
 /// </summary>
 /// <param name="pFunc">Function address</param>
 /// <param name="pHook">Hook address</param>
+/// /// <param name="Type">Hook type</param>
 /// <returns>Status code</returns>
-NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook );
+NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type );
 
 /// <summary>
 /// Restore hooked function

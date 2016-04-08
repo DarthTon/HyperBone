@@ -11,6 +11,7 @@ typedef struct _HOOK_CONTEXT
     BOOLEAN Hook;           // TRUE to hook page, FALSE to unhook
     ULONG64 DataPagePFN;    // Physical data page PFN
     ULONG64 CodePagePFN;    // Physical code page PFN
+    HOOK_TYPE Type;         // Hook Type
 } HOOK_CONTEXT, *PHOOK_CONTEXT;
 
 #pragma pack(push, 1)
@@ -53,7 +54,7 @@ VOID PHpHookCallbackDPC( IN PRKDPC Dpc, IN PVOID Context, IN PVOID SystemArgumen
     PHOOK_CONTEXT pCTX = (PHOOK_CONTEXT)Context;
 
     if (pCTX != NULL)
-        __vmx_vmcall( pCTX->Hook ? HYPERCALL_HOOK_PAGE : HYPERCALL_UNHOOK_PAGE, pCTX->DataPagePFN, pCTX->CodePagePFN, 0 );
+        __vmx_vmcall( pCTX->Hook ? HYPERCALL_HOOK_PAGE : HYPERCALL_UNHOOK_PAGE, pCTX->DataPagePFN, pCTX->CodePagePFN, pCTX->Type );
 
     KeSignalCallDpcSynchronize( SystemArgument2 );
     KeSignalCallDpcDone( SystemArgument1 );
@@ -135,8 +136,9 @@ NTSTATUS PHpCopyCode( IN PVOID pFunc, OUT PUCHAR OriginalStore, OUT PULONG pSize
 /// </summary>
 /// <param name="pFunc">Function address</param>
 /// <param name="pHook">Hook address</param>
+/// /// <param name="Type">Hook type</param>
 /// <returns>Status code</returns>
-NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook )
+NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
 {
     PUCHAR CodePage = NULL;
     BOOLEAN Newpage = FALSE;
@@ -184,6 +186,7 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook )
     PHpInitJumpThunk( &thunk, (ULONG64)pHook );
     memcpy( CodePage + page_offset, &thunk, sizeof( thunk ) );
 
+    pHookEntry->Type = Type;
     pHookEntry->OriginalPtr = pFunc;
     pHookEntry->DataPageVA = PAGE_ALIGN( pFunc );
     pHookEntry->DataPagePFN = PFN( MmGetPhysicalAddress( pFunc ).QuadPart );
@@ -202,6 +205,7 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook )
         ctx.Hook = TRUE;
         ctx.DataPagePFN = pHookEntry->DataPagePFN;
         ctx.CodePagePFN = pHookEntry->CodePagePFN;
+        ctx.Type = Type;
 
         KeGenericCallDpc( PHpHookCallbackDPC, &ctx );
     }
@@ -220,8 +224,8 @@ NTSTATUS PHRestore( IN PVOID pFunc )
     if (!g_Data->EPTExecOnlySupported)
         return STATUS_NOT_SUPPORTED;
 
-    PPAGE_HOOK_ENTRY pEntry = PHGetHookEntry( pFunc );
-    if (pEntry == NULL)
+    PPAGE_HOOK_ENTRY pHookEntry = PHGetHookEntry( pFunc );
+    if (pHookEntry == NULL)
         return STATUS_NOT_FOUND;
 
     // Restore original bytes
@@ -229,22 +233,23 @@ NTSTATUS PHRestore( IN PVOID pFunc )
     {
         // TODO: atomic memory patching, i.e. with other CPUs spinlocked
         ULONG_PTR page_offset = (ULONG_PTR)pFunc - (ULONG_PTR)PAGE_ALIGN( pFunc );
-        memcpy( (PUCHAR)pEntry->CodePageVA + page_offset, pEntry->OriginalData, pEntry->OriginalSize );
+        memcpy( (PUCHAR)pHookEntry->CodePageVA + page_offset, pHookEntry->OriginalData, pHookEntry->OriginalSize );
     }
     // Swap pages
     else
     {
         HOOK_CONTEXT ctx = { 0 };
         ctx.Hook = FALSE;
-        ctx.DataPagePFN = PFN( MmGetPhysicalAddress( pFunc ).QuadPart );
-        ctx.CodePagePFN = 0;
+        ctx.DataPagePFN = pHookEntry->DataPagePFN;
+        ctx.CodePagePFN = pHookEntry->CodePagePFN;;
+        ctx.Type = pHookEntry->Type;
 
         KeGenericCallDpc( PHpHookCallbackDPC, &ctx );
     }
 
-    MmFreeContiguousMemory( pEntry->CodePageVA );
-    RemoveEntryList( &pEntry->Link );
-    ExFreePoolWithTag( pEntry, HB_POOL_TAG );
+    MmFreeContiguousMemory( pHookEntry->CodePageVA );
+    RemoveEntryList( &pHookEntry->Link );
+    ExFreePoolWithTag( pHookEntry, HB_POOL_TAG );
     
     return STATUS_SUCCESS;
 }

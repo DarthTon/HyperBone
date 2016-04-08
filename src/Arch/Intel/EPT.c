@@ -398,52 +398,54 @@ VOID VmExitEptViolation( IN PGUEST_STATE GuestState )
     ULONG64 pfn = PFN( GuestState->PhysicalAddress.QuadPart );
     PEPT_VIOLATION_DATA pViolationData = (PEPT_VIOLATION_DATA)&GuestState->ExitQualification;
 
-    // Execute-only page violated
-    if (pViolationData->Fields.PTEExecute && !pViolationData->Fields.PTERead)
+    // Page is hooked
+    PPAGE_HOOK_ENTRY pHookEntry = PHGetHookEntryByPFN( pfn, DATA_PAGE );
+    if (pHookEntry)
     {
-        // Page is hooked
-        PPAGE_HOOK_ENTRY pPageEntry = PHGetHookEntryByPFN( pfn, DATA_PAGE );
-        if (pPageEntry)
+        /*DPRINT(
+            "HyperBone: CPU %d: %s: Hooked page %s, EIP 0x%p, Linear 0x%p, Physical 0x%p, Violation data 0x%x\n",
+            CPU_IDX, __FUNCTION__, 
+            pViolationData->Fields.Execute ? "EXECUTE" : (pViolationData->Fields.Read ? "READ" : "WRITE"),
+            GuestState->GuestRip, GuestState->LinearAddress, GuestState->PhysicalAddress.QuadPart, pViolationData->All
+            );*/
+
+        // Set target host PFN
+        ULONG64 TargetPFN = pHookEntry->DataPagePFN;
+
+        // Executable page for writing
+        if (pHookEntry->Type == HOOK_SWAP && pViolationData->Fields.Write)
+            TargetPFN = pfn;
+        // Executable page for TLB splitting
+        else if (pHookEntry->Type == HOOK_SPLIT && pViolationData->Fields.Execute)
+            TargetPFN = pHookEntry->CodePagePFN;
+
+        // Impossible execute violation
+        if(pHookEntry->Type == HOOK_SWAP &&  pViolationData->Fields.Execute)
         {
-            /*DPRINT(
-                "HyperBone: CPU %d: %s: Hooked page access, EIP 0x%p, Linear 0x%p, Physical 0x%p, Violation data 0x%x\n",
+            DPRINT(
+                "HyperBone: CPU %d: %s: Impossible page 0x%p access 0x%X\n", CPU_IDX, __FUNCTION__,
+                GuestState->PhysicalAddress.QuadPart, pViolationData->All
+                );
+        }
+        else
+            EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, TargetPFN, 1 );
+           
+        // Do a MTF exit upon resume
+        ToggleMTF( TRUE );
+        GuestState->Vcpu->HookDispatch.pEntry = pHookEntry;
+        GuestState->Vcpu->HookDispatch.Rip = GuestState->GuestRip;
+    }
+    // Create new identity page map
+    else
+    {
+        /*DPRINT(
+                "HyperBone: CPU %d: %s: EPT violation, EIP 0x%p, Linear 0x%p, Physical 0x%p, Violation data 0x%X\n",
                 CPU_IDX, __FUNCTION__,
                 GuestState->GuestRip, GuestState->LinearAddress, GuestState->PhysicalAddress.QuadPart, pViolationData->All
                 );*/
 
-            // Swap to data page if data read
-            if (pViolationData->Fields.Read)
-                EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, pPageEntry->DataPagePFN, 1 );
-            // Allow write
-            else if(pViolationData->Fields.Write)
-                EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, pfn, 1 );
-            // WTF???
-            else
-                DPRINT(
-                    "HyperBone: CPU %d: %s: Impossible page 0x%p access 0x%X\n", CPU_IDX, __FUNCTION__, 
-                    GuestState->PhysicalAddress.QuadPart, pViolationData->All 
-                    );
-
-            // Do a MTF exit upon resume
-            ToggleMTF( TRUE );
-            GuestState->Vcpu->HookDispatch.pEntry = pPageEntry;
-            GuestState->Vcpu->HookDispatch.Rip = GuestState->GuestRip;
-            return;
-        }
-        else
-        {
-            DPRINT( "HyperBone: CPU %d: %s: Failed to find Hook translation for 0x%p\n", CPU_IDX, __FUNCTION__, GuestState->PhysicalAddress.QuadPart );
-        }
+        EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, pfn, 1 );
     }
-
-
-    /*DPRINT(
-        "HyperBone: CPU %d: %s: EPT violation, EIP 0x%p, Linear 0x%p, Physical 0x%p, Violation data 0x%X\n",
-        CPU_IDX, __FUNCTION__,
-        GuestState->GuestRip, GuestState->LinearAddress, GuestState->PhysicalAddress.QuadPart, pViolationData->All
-        );*/
-
-    EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, pfn, 1 );
 }
 
 /// <summary>

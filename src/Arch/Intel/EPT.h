@@ -4,6 +4,7 @@
 #define EPT_ACCESS_READ     (1 << 0)
 #define EPT_ACCESS_WRITE    (1 << 1)
 #define EPT_ACCESS_EXEC     (1 << 2)
+#define EPT_ACCESS_NONE     0
 #define EPT_ACCESS_ALL      EPT_ACCESS_READ | EPT_ACCESS_WRITE | EPT_ACCESS_EXEC
 
 #define EPT_TABLE_ORDER     9

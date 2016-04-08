@@ -57,7 +57,7 @@ VOID TestPageHook()
     RtlCopyMemory( buf, pFn, 16 );
     DPRINT( "HyperBone: CPU %d: %s: Buffer contents: 0x%p, Call result 0x%X\n", CPU_IDX, __FUNCTION__, *(PULONG64)buf, TestFn( 100, 5 ) );
 
-    PHHook( pFn, (PVOID)hkTestFn );
+    PHHook( pFn, (PVOID)hkTestFn, HOOK_SPLIT );
 
     RtlCopyMemory( buf, pFn, 16 );
     DPRINT( "HyperBone: CPU %d: %s: Buffer contents: 0x%p, Call result 0x%X\n", CPU_IDX, __FUNCTION__, *(PULONG64)buf, TestFn( 100, 5 ) );
@@ -91,7 +91,7 @@ VOID TestStart( IN BOOLEAN SyscallHook, IN BOOLEAN PageHook1, IN IN BOOLEAN Page
         {
             if (g_NtClose)
             {
-                if (!NT_SUCCESS( PHHook( g_NtClose, (PVOID)hkNtClose2 ) ))
+                if (!NT_SUCCESS( PHHook( g_NtClose, (PVOID)hkNtClose2, HOOK_SWAP ) ))
                     DPRINT( "HyperBone: CPU %d: %s: PHHook() failed\n", CPU_IDX, __FUNCTION__ );
             }
             else

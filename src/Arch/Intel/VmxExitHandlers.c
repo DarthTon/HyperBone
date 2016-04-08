@@ -273,7 +273,7 @@ VOID VmExitVmCall( IN PGUEST_STATE GuestState )
     case HYPERCALL_HOOK_PAGE:
         EptUpdateTableRecursive(
             &GuestState->Vcpu->EPT, GuestState->Vcpu->EPT.PML4Ptr, 
-            EPT_TOP_LEVEL, GuestState->GpRegs->Rdx, EPT_ACCESS_EXEC,
+            EPT_TOP_LEVEL, GuestState->GpRegs->Rdx, GuestState->GpRegs->R9 == HOOK_SWAP ? EPT_ACCESS_EXEC : EPT_ACCESS_NONE,
             GuestState->GpRegs->R8, 1 
             );
         __invept( INV_ALL_CONTEXTS, &ctx );
@@ -548,10 +548,20 @@ VOID VmExitMTF( IN PGUEST_STATE GuestState )
         if (Vcpu->HookDispatch.Rip == GuestState->GuestRip)
             return;
 
-        EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pHook->DataPagePFN, EPT_ACCESS_EXEC, pHook->CodePagePFN, 1 );
+        // Update EPT PTE access
+        EptUpdateTableRecursive(
+            pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, 
+            pHook->DataPagePFN, 
+            (pHook->Type == HOOK_SWAP ?  EPT_ACCESS_EXEC : EPT_ACCESS_NONE), 
+            pHook->CodePagePFN, 1 
+            );
 
-        EPT_CTX ctx = { 0 };
-        __invept( INV_ALL_CONTEXTS, &ctx );
+        // Rely on page cache if split method is used
+        if (pHook->Type != HOOK_SPLIT)
+        {
+            EPT_CTX ctx = { 0 };
+            __invept( INV_ALL_CONTEXTS, &ctx );
+        }
 
         Vcpu->HookDispatch.pEntry = NULL;
         Vcpu->HookDispatch.Rip = 0;

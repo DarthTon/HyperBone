@@ -135,7 +135,7 @@ NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registr
 
     DPRINT( "HyperBone: CPU %d: %s: Subverting finished\n", CPU_IDX, __FUNCTION__ );
 
-    TestStart( TRUE, TRUE, TRUE );
+    TestStart( FALSE, FALSE, TRUE );
     DriverObject->DriverUnload = HBUnload;  
     return status;
 }
