@@ -7,6 +7,7 @@ HyperBone
 - Syscall hooks via MSR_LSTAR
 - Kernel inline hooks
 - Kernel page substitution
+- Kernel page EPT TLB splitting
 - MSR hooks
 - IDT hooks
 
