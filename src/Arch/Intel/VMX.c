@@ -232,6 +232,8 @@ VOID VmxSubvertCPU( IN PVCPU Vcpu )
         // If we got here, either VMCS setup failed in some way, or the launch
         // did not proceed as planned. Because VmxEnabled is not set to 1, this
         // will correctly register as a failure.
+        Vcpu->VmxState = VMX_STATE_OFF;
+
         DPRINT( "HyperBone: CPU %d: %s: __vmx_vmlaunch failed with result %d\n", CPU_IDX, __FUNCTION__, res );
 
 failedvmxoff:
