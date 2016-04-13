@@ -165,8 +165,34 @@ typedef union _IA32_VMX_PROCBASED_CTLS_MSR
     ULONG64 All;
     struct
     {
-        ULONG64 Reserved1 : 63;                    // [0-62] Undefined
-        ULONG64 ActivateSecondaryControls : 1;    // [63] Does VMX_PROCBASED_CTLS2_MSR exist
+        ULONG64 Reserved0 : 32;                // [0-31]
+        ULONG64 Reserved1 : 2;                 // [32 + 0-1]
+        ULONG64 InterruptWindowExiting : 1;    // [32 + 2]
+        ULONG64 UseTSCOffseting : 1;           // [32 + 3]
+        ULONG64 Reserved2 : 3;                 // [32 + 4-6]
+        ULONG64 HLTExiting : 1;                // [32 + 7]
+        ULONG64 Reserved3 : 1;                 // [32 + 8]
+        ULONG64 INVLPGExiting : 1;             // [32 + 9]
+        ULONG64 MWAITExiting : 1;              // [32 + 10]
+        ULONG64 RDPMCExiting : 1;              // [32 + 11]
+        ULONG64 RDTSCExiting : 1;              // [32 + 12]
+        ULONG64 Reserved4 : 2;                 // [32 + 13-14]
+        ULONG64 CR3LoadExiting : 1;            // [32 + 15]
+        ULONG64 CR3StoreExiting : 1;           // [32 + 16]
+        ULONG64 Reserved5 : 2;                 // [32 + 17-18]
+        ULONG64 CR8LoadExiting : 1;            // [32 + 19]
+        ULONG64 CR8StoreExiting : 1;           // [32 + 20]
+        ULONG64 UseTPRShadowExiting : 1;       // [32 + 21]
+        ULONG64 NMIWindowExiting : 1;          // [32 + 22]
+        ULONG64 MovDRExiting : 1;              // [32 + 23]
+        ULONG64 UnconditionalIOExiting : 1;    // [32 + 24]
+        ULONG64 UseIOBitmaps : 1;              // [32 + 25]
+        ULONG64 Reserved6 : 1;                 // [32 + 26]
+        ULONG64 MonitorTrapFlag : 1;           // [32 + 27]
+        ULONG64 UseMSRBitmaps : 1;             // [32 + 28]
+        ULONG64 MONITORExiting : 1;            // [32 + 29]
+        ULONG64 PAUSEExiting : 1;              // [32 + 30]
+        ULONG64 ActivateSecondaryControl : 1;  // [32 + 31]  Does VMX_PROCBASED_CTLS2_MSR exist
     } Fields;
 } IA32_VMX_PROCBASED_CTLS_MSR, *PIA32_VMX_PROCBASED_CTLS_MSR;
 
@@ -175,12 +201,28 @@ typedef union _IA32_VMX_PROCBASED_CTLS2_MSR
     ULONG64 All;
     struct
     {
-        ULONG64 Reserved1 : 32;     // [0-31] Undefined
-        ULONG64 Reserved2 : 1;      // [32] Undefined
-        ULONG64 EnableEPT : 1;      // [33] Whether EPT is enabled/supported
-        ULONG64 Reserved3 : 3;      // [34-36] Undefined
-        ULONG64 EnableVPID : 1;     // [37] Whether VPID is enabled/supported
-        ULONG64 Reserved4 : 26;     // [38-63] Undefined
+        ULONG64 Reserved0 : 32;                 // [0-31]
+        ULONG64 VirtualizeAPICAccesses : 1;     // [32 + 0]
+        ULONG64 EnableEPT : 1;                  // [32 + 1]
+        ULONG64 DescriptorTableExiting : 1;     // [32 + 2]
+        ULONG64 EnableRDTSCP : 1;               // [32 + 3]
+        ULONG64 VirtualizeX2APICMode : 1;       // [32 + 4]
+        ULONG64 EnableVPID : 1;                 // [32 + 5]
+        ULONG64 WBINVDExiting : 1;              // [32 + 6]
+        ULONG64 UnrestrictedGuest : 1;          // [32 + 7]
+        ULONG64 APICRegisterVirtualization : 1; // [32 + 8]
+        ULONG64 VirtualInterruptDelivery : 1;   // [32 + 9]
+        ULONG64 PAUSELoopExiting : 1;           // [32 + 10]
+        ULONG64 RDRANDExiting : 1;              // [32 + 11]
+        ULONG64 EnableINVPCID : 1;              // [32 + 12]
+        ULONG64 EnableVMFunctions : 1;          // [32 + 13]
+        ULONG64 VMCSShadowing : 1;              // [32 + 14]
+        ULONG64 Reserved1 : 1;                  // [32 + 15]
+        ULONG64 RDSEEDExiting : 1;              // [32 + 16]
+        ULONG64 Reserved2 : 1;                  // [32 + 17]
+        ULONG64 EPTViolation : 1;               // [32 + 18]
+        ULONG64 Reserved3 : 1;                  // [32 + 19]
+        ULONG64 EnableXSAVESXSTORS : 1;         // [32 + 20]
     } Fields;
 } IA32_VMX_PROCBASED_CTLS2_MSR, *PIA32_VMX_PROCBASED_CTLS2_MSR;
 

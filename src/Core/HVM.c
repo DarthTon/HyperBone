@@ -16,7 +16,17 @@ BOOLEAN HvmIsHVSupported()
     return TRUE;
 }
 
+/// <summary>
+/// CPU virtualization features
+/// </summary>
+VOID HvmCheckFeatures()
+{
+    CPU_VENDOR vendor = UtilCPUVendor();
+    if (vendor == CPU_Intel)
+        VmxCheckFeatures();
+}
 
+//
 // Vendor-specific calls
 //
 inline VOID IntelSubvertCPU( IN PVCPU Vcpu, IN PVOID SystemDirectoryTableBase )
@@ -79,7 +89,6 @@ NTSTATUS StartHV()
     if (g_Data->CPUVendor == CPU_Other)
         return STATUS_NOT_SUPPORTED;
 
-    EptQuerySupport();
     KeGenericCallDpc( HvmpHVCallbackDPC, (PVOID)__readcr3() );
 
     // Some CPU failed

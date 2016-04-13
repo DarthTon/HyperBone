@@ -1,14 +1,21 @@
 #pragma once
 #define VM_VPID             1
-
-#define EPT_ACCESS_READ     (1 << 0)
-#define EPT_ACCESS_WRITE    (1 << 1)
-#define EPT_ACCESS_EXEC     (1 << 2)
-#define EPT_ACCESS_NONE     0
-#define EPT_ACCESS_ALL      EPT_ACCESS_READ | EPT_ACCESS_WRITE | EPT_ACCESS_EXEC
-
 #define EPT_TABLE_ORDER     9
 #define EPT_TABLE_ENTRIES   512
+
+/// <summary>
+/// EPT page access
+/// </summary>
+typedef enum _EPT_ACCESS
+{
+    EPT_ACCESS_NONE  = 0,
+    EPT_ACCESS_READ  = 1,
+    EPT_ACCESS_WRITE = 2,
+    EPT_ACCESS_EXEC  = 4,
+    EPT_ACCESS_RW    = EPT_ACCESS_READ | EPT_ACCESS_WRITE,
+    EPT_ACCESS_ALL   = EPT_ACCESS_READ | EPT_ACCESS_WRITE | EPT_ACCESS_EXEC
+} EPT_ACCESS;
+
 
 /// <summary>
 /// ETP table level
@@ -141,12 +148,6 @@ struct _EPT_DATA;
 #pragma warning(default: 4214)
 
 /// <summary>
-/// Check if EPT, VPID and other stuff is supported
-/// </summary>
-/// <returns>Status code</returns>
-NTSTATUS EptQuerySupport();
-
-/// <summary>
 /// Enable EPT for CPU
 /// </summary>
 /// <param name="PML4">PML4 pointer to use</param>
@@ -187,7 +188,7 @@ NTSTATUS EptUpdateTableRecursive(
     IN PEPT_MMPTE pTable,
     IN EPT_TABLE_LEVEL level,
     IN ULONG64 pfn, 
-    IN UCHAR access, 
+    IN EPT_ACCESS access,
     IN ULONG64 hostPFN,
     IN ULONG count
     );

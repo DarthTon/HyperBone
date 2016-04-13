@@ -7,6 +7,11 @@
 /// <returns>TRUE if supported</returns>
 BOOLEAN HvmIsHVSupported();
 
+/// <summary>
+/// CPU virtualization features
+/// </summary>
+VOID HvmCheckFeatures();
+
  /// <summary>
  /// Virtualize each CPU
  /// </summary>

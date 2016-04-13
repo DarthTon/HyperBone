@@ -71,6 +71,17 @@ typedef struct _EPT_PAGES_ENTRY
     union _EPT_MMPTE* pages[PAGES_PER_ENTRY];
 } EPT_PAGES_ENTRY, *PEPT_PAGES_ENTRY;
 
+typedef struct _VMX_FEATURES
+{
+    ULONG64 SecondaryControls : 1;  // Secondary controls are enabled
+    ULONG64 TrueMSRs : 1;           // True VMX MSR values are supported
+    ULONG64 EPT : 1;                // EPT supported by CPU
+    ULONG64 VPID : 1;               // VPID supported by CPU
+    ULONG64 ExecOnlyEPT : 1;        // EPT translation with execute-only access is supported
+    ULONG64 InvSingleAddress : 1;   // IVVPID for single address
+    ULONG64 VMFUNC : 1;             // VMFUNC is supported
+} VMX_FEATURES, *PVMX_FEATURES;
+
 /// <summary>
 /// VCPU EPT info
 /// </summary>
@@ -79,7 +90,7 @@ typedef struct _EPT_DATA
     union _EPT_MMPTE* PML4Ptr;                      // EPT PML4 pointer
     LIST_ENTRY PageList;                            // EPT_PAGES_ENTRY list
     union _EPT_MMPTE* Pages[EPT_PREALLOC_PAGES];    // Array of preallocated pages
-    ULONG Preallocations;                          // Number of used preallocated pages
+    ULONG Preallocations;                           // Number of used preallocated pages
     ULONG TotalPages;                               // Total number of EPT pages
 } EPT_DATA, *PEPT_DATA;
 
@@ -106,6 +117,7 @@ typedef struct _VCPU
     PVOID VMMStack;                         // Host VMM stack memory
     EPT_DATA EPT;                           // EPT mapping data
     ULONG64 OriginalLSTAR;                  // LSTAR MSR value
+    ULONG64 TscOffset;                      // TSC VMM offset value
     PAGE_HOOK_STATE HookDispatch;           // Page hooking trace state
 } VCPU, *PVCPU;
 
@@ -115,9 +127,7 @@ typedef struct _VCPU
 typedef struct _GLOBAL_DATA
 {
     CPU_VENDOR CPUVendor;                   // Intel or AMD
-    BOOLEAN EPTSupported;                   // EPT supported by CPU
-    BOOLEAN VPIDSpported;                   // VPID supported by CPU
-    BOOLEAN EPTExecOnlySupported;           // EPT translation with execute-only access is supported
+    VMX_FEATURES Features;                  // VMX CPU features
     PPHYSICAL_MEMORY_DESCRIPTOR Memory;     // Used PFN regions
     PUCHAR MSRBitmap;                       // MSR vmexit bitmap
     LONG vcpus;                             // Number of virtualized CPUs

@@ -7,45 +7,6 @@
 
 #include <intrin.h>
 
-/// <summary>
-/// Check if EPT, VPID and other stuff is supported
-/// </summary>
-/// <returns>Status code</returns>
-NTSTATUS EptQuerySupport()
-{
-    IA32_VMX_PROCBASED_CTLS_MSR ctl = { 0 };
-    IA32_VMX_PROCBASED_CTLS2_MSR ctl2 = { 0 };
-    IA32_VMX_EPT_VPID_CAP_MSR vpidcap = { 0 };
-
-    ctl.All = __readmsr( MSR_IA32_VMX_PROCBASED_CTLS );
-    if (ctl.Fields.ActivateSecondaryControls == 0)
-    {
-        DPRINT( "HyperBone: CPU %d: %s: No secondary contol support\n", CPU_IDX, __FUNCTION__ );
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    // EPT/VPID
-    ctl2.All = __readmsr( MSR_IA32_VMX_PROCBASED_CTLS2 );
-    if (ctl2.Fields.EnableEPT == 0 || ctl2.Fields.EnableVPID == 0)
-    {
-        DPRINT( "HyperBone: CPU %d: %s: No EPT/VPID support\n", CPU_IDX, __FUNCTION__ );
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    g_Data->EPTSupported = ctl2.Fields.EnableEPT  != 0;
-    g_Data->VPIDSpported = ctl2.Fields.EnableVPID != 0;
-
-    // Execute only
-    vpidcap.All = __readmsr( MSR_IA32_VMX_EPT_VPID_CAP );
-    if (vpidcap.Fields.ExecuteOnly == 0)
-    {
-        DPRINT( "HyperBone: CPU %d: %s: No execute-only EPT translation support\n", CPU_IDX, __FUNCTION__ );
-        return STATUS_NOT_SUPPORTED;
-    }
-
-    g_Data->EPTExecOnlySupported = TRUE;
-    return STATUS_SUCCESS;
-}
 
 /// <summary>
 /// Enable EPT for CPU
@@ -69,7 +30,7 @@ VOID EptEnable( IN PEPT_PML4_ENTRY PML4 )
 
     primary.Fields.ActivateSecondaryControl = TRUE;
     secondary.Fields.EnableEPT = TRUE;
-    if(g_Data->VPIDSpported)
+    if(g_Data->Features.VPID)
         secondary.Fields.EnableVPID = TRUE;
 
     __vmx_vmwrite( SECONDARY_VM_EXEC_CONTROL, secondary.All );
@@ -411,27 +372,34 @@ VOID VmExitEptViolation( IN PGUEST_STATE GuestState )
 
         // Set target host PFN
         ULONG64 TargetPFN = pHookEntry->DataPagePFN;
+        EPT_ACCESS TargetAccess = EPT_ACCESS_ALL;
 
         // Executable page for writing
-        if (pHookEntry->Type == HOOK_SWAP && pViolationData->Fields.Write)
-            TargetPFN = pfn;
-        // Executable page for TLB splitting
-        else if (pHookEntry->Type == HOOK_SPLIT && pViolationData->Fields.Execute)
+        if (pViolationData->Fields.Read)
+        {
+            TargetPFN = pHookEntry->DataPagePFN;
+            TargetAccess = EPT_ACCESS_RW;
+        }
+        else if (pViolationData->Fields.Write)
+        {
             TargetPFN = pHookEntry->CodePagePFN;
-
-        // Impossible execute violation
-        if(pHookEntry->Type == HOOK_SWAP &&  pViolationData->Fields.Execute)
+            TargetAccess = EPT_ACCESS_RW;
+        }
+        else if (pViolationData->Fields.Execute)
+        {
+            TargetPFN = pHookEntry->CodePagePFN;
+            TargetAccess = EPT_ACCESS_EXEC;
+        }
+        else
         {
             DPRINT(
                 "HyperBone: CPU %d: %s: Impossible page 0x%p access 0x%X\n", CPU_IDX, __FUNCTION__,
                 GuestState->PhysicalAddress.QuadPart, pViolationData->All
                 );
         }
-        else
-            EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, EPT_ACCESS_ALL, TargetPFN, 1 );
+
+        EptUpdateTableRecursive( pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, pfn, TargetAccess, TargetPFN, 1 );
            
-        // Do a MTF exit upon resume
-        ToggleMTF( TRUE );
         GuestState->Vcpu->HookDispatch.pEntry = pHookEntry;
         GuestState->Vcpu->HookDispatch.Rip = GuestState->GuestRip;
     }
@@ -458,12 +426,6 @@ VOID VmExitEptMisconfig( IN PGUEST_STATE GuestState )
         "HyperBone: CPU %d: %s: EPT misconfiguration, physical %p, Data 0x%X\n", CPU_IDX, __FUNCTION__, 
         GuestState->PhysicalAddress.QuadPart, GuestState->ExitQualification 
         );
-    /*PEPT_DATA pEPT = NULL;
-    EptGetPTEForPhysical( GuestState->Vcpu->EPT.PML4Ptr, GuestState->PhysicalAddress, &pEPT );
-    if (pEPT)
-    {
-
-    }*/
 
     KeBugCheckEx( HYPERVISOR_ERROR, BUG_CHECK_EPT_MISCONFIG, GuestState->PhysicalAddress.QuadPart, GuestState->ExitQualification, 0 );
 }

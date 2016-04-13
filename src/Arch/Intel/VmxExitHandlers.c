@@ -20,15 +20,17 @@ Environment:
 
 --*/
 
-#include "../../Include/CPU.h"
 #include "VMX.h"
 #include "EPT.h"
 #include "VmxEvent.h"
+#include "../../Include/CPU.h"
 #include "../../Hooks/PageHook.h"
 
 VOID VmExitUnknown( IN PGUEST_STATE GuestState );
 VOID VmExitINVD( IN PGUEST_STATE GuestState );
 VOID VmExitCPUID( IN PGUEST_STATE GuestState );
+VOID VmExitRdtsc( IN PGUEST_STATE GuestState );
+VOID VmExitRdtscp( IN PGUEST_STATE GuestState );
 VOID VmExitXSETBV( IN PGUEST_STATE GuestState );
 VOID VmExitVMOP( IN PGUEST_STATE GuestState );
 
@@ -67,7 +69,7 @@ pfnExitHandler g_ExitHandler[VMX_MAX_GUEST_VMEXIT] =
     VmExitINVD,         // 13 EXIT_REASON_INVD
     VmExitUnknown,      // 14 EXIT_REASON_INVLPG
     VmExitUnknown,      // 15 EXIT_REASON_RDPMC
-    VmExitUnknown,      // 16 EXIT_REASON_RDTSC
+    VmExitRdtsc,        // 16 EXIT_REASON_RDTSC
     VmExitUnknown,      // 17 EXIT_REASON_RSM
     VmExitVmCall,       // 18 EXIT_REASON_VMCALL
     VmExitVMOP,         // 19 EXIT_REASON_VMCLEAR
@@ -102,7 +104,7 @@ pfnExitHandler g_ExitHandler[VMX_MAX_GUEST_VMEXIT] =
     VmExitEptViolation, // 48 EXIT_REASON_EPT_VIOLATION
     VmExitEptMisconfig, // 49 EXIT_REASON_EPT_MISCONFIG
     VmExitVMOP,         // 50 EXIT_REASON_INVEPT
-    VmExitUnknown,      // 51 EXIT_REASON_RDTSCP
+    VmExitRdtscp,       // 51 EXIT_REASON_RDTSCP
     VmExitUnknown,      // 52 EXIT_REASON_PREEMPT_TIMER
     VmExitVMOP,         // 53 EXIT_REASON_INVVPID
     VmExitINVD,         // 54 EXIT_REASON_WBINVD
@@ -222,6 +224,36 @@ VOID VmExitCPUID( IN PGUEST_STATE GuestState )
 }
 
 /// <summary>
+/// RDTSC handler
+/// </summary>
+/// <param name="GuestState">Guest VM state</param>
+VOID VmExitRdtsc( IN PGUEST_STATE GuestState )
+{
+    ULARGE_INTEGER tsc = { 0 };
+    tsc.QuadPart = __rdtsc();
+    GuestState->GpRegs->Rdx = tsc.HighPart;
+    GuestState->GpRegs->Rax = tsc.LowPart;
+
+    VmxpAdvanceEIP( GuestState );
+}
+
+/// <summary>
+/// RDTSCP handler
+/// </summary>
+/// <param name="GuestState">Guest VM state</param>
+VOID VmExitRdtscp( IN PGUEST_STATE GuestState )
+{
+    unsigned int tscAux = 0;
+    ULARGE_INTEGER tsc = { 0 };
+    tsc.QuadPart = __rdtscp( &tscAux );
+    GuestState->GpRegs->Rdx = tsc.HighPart;
+    GuestState->GpRegs->Rax = tsc.LowPart;
+    GuestState->GpRegs->Rcx = tscAux;
+
+    VmxpAdvanceEIP( GuestState );
+}
+
+/// <summary>
 /// XSETBV handler
 /// </summary>
 /// <param name="GuestState">Guest VM state</param>
@@ -238,9 +270,11 @@ VOID VmExitXSETBV( IN PGUEST_STATE GuestState )
 VOID VmExitVMOP( IN PGUEST_STATE GuestState )
 {
     // Set the CF flag, which is how VMX instructions indicate failure
-    GuestState->GuestEFlags.Fields.CF = TRUE;
-    __vmx_vmwrite( GUEST_RFLAGS, GuestState->GuestEFlags.All );
-    VmxpAdvanceEIP( GuestState );
+    //GuestState->GuestEFlags.Fields.CF = TRUE;
+    //__vmx_vmwrite( GUEST_RFLAGS, GuestState->GuestEFlags.All );
+    //VmxpAdvanceEIP( GuestState );
+    UNREFERENCED_PARAMETER( GuestState );
+    VmxInjectEvent( INTERRUPT_HARDWARE_EXCEPTION, VECTOR_INVALID_OPCODE_EXCEPTION, 0 );
 }
 
 /// <summary>
@@ -273,7 +307,7 @@ VOID VmExitVmCall( IN PGUEST_STATE GuestState )
     case HYPERCALL_HOOK_PAGE:
         EptUpdateTableRecursive(
             &GuestState->Vcpu->EPT, GuestState->Vcpu->EPT.PML4Ptr, 
-            EPT_TOP_LEVEL, GuestState->GpRegs->Rdx, GuestState->GpRegs->R9 == HOOK_SWAP ? EPT_ACCESS_EXEC : EPT_ACCESS_NONE,
+            EPT_TOP_LEVEL, GuestState->GpRegs->Rdx, EPT_ACCESS_EXEC,
             GuestState->GpRegs->R8, 1 
             );
         __invept( INV_ALL_CONTEXTS, &ctx );
@@ -318,7 +352,7 @@ VOID VmExitCR( IN PGUEST_STATE GuestState )
             break;
         case 3:
             __vmx_vmwrite( GUEST_CR3, *regPtr );
-            if (g_Data->VPIDSpported)
+            if (g_Data->Features.VPID)
                 __invvpid( INV_ALL_CONTEXTS, &ctx );
             break;
         case 4:
@@ -377,7 +411,7 @@ VOID VmExitMSRRead( IN PGUEST_STATE GuestState )
     {
     case MSR_LSTAR:
         MsrValue.QuadPart = GuestState->Vcpu->OriginalLSTAR != 0 ? GuestState->Vcpu->OriginalLSTAR : __readmsr( MSR_LSTAR );
-        DPRINT( "HyperBone: CPU %d: %s: rdmsr MSR_LSTAR, value 0x%p\n", CPU_IDX, __FUNCTION__, ecx, MsrValue.QuadPart );
+        //DPRINT( "HyperBone: CPU %d: %s: rdmsr MSR_LSTAR, value 0x%p\n", CPU_IDX, __FUNCTION__, MsrValue.QuadPart );
         break;
     case MSR_GS_BASE:
         MsrValue.QuadPart = VmcsRead( GUEST_GS_BASE );
@@ -389,9 +423,16 @@ VOID VmExitMSRRead( IN PGUEST_STATE GuestState )
         MsrValue.QuadPart = VmcsRead( GUEST_IA32_DEBUGCTL );
         break;
 
+        // Report VMX as locked
+    case MSR_IA32_FEATURE_CONTROL:
+        MsrValue.QuadPart = __readmsr( ecx );
+        PIA32_FEATURE_CONTROL_MSR pMSR = (PIA32_FEATURE_CONTROL_MSR)&MsrValue.QuadPart;
+        pMSR->Fields.EnableVmxon = FALSE;
+        pMSR->Fields.Lock = TRUE;
+        break;
+
         // Virtualize VMX register access
     case MSR_IA32_VMX_BASIC:
-    case MSR_IA32_VMX_VMFUNC:
     case MSR_IA32_VMX_PINBASED_CTLS:
     case MSR_IA32_VMX_PROCBASED_CTLS:
     case MSR_IA32_VMX_EXIT_CTLS:
@@ -408,6 +449,7 @@ VOID VmExitMSRRead( IN PGUEST_STATE GuestState )
     case MSR_IA32_VMX_TRUE_PROCBASED_CTLS:
     case MSR_IA32_VMX_TRUE_EXIT_CTLS:
     case MSR_IA32_VMX_TRUE_ENTRY_CTLS:
+    case MSR_IA32_VMX_VMFUNC:
         MsrValue.QuadPart = GuestState->Vcpu->MsrData[VMX_MSR( ecx )].QuadPart;
         break;
 
@@ -454,7 +496,6 @@ VOID VmExitMSRWrite( IN PGUEST_STATE GuestState )
 
         // Virtualize VMX register access
     case MSR_IA32_VMX_BASIC:
-    case MSR_IA32_VMX_VMFUNC:
     case MSR_IA32_VMX_PINBASED_CTLS:
     case MSR_IA32_VMX_PROCBASED_CTLS:
     case MSR_IA32_VMX_EXIT_CTLS:
@@ -471,7 +512,7 @@ VOID VmExitMSRWrite( IN PGUEST_STATE GuestState )
     case MSR_IA32_VMX_TRUE_PROCBASED_CTLS:
     case MSR_IA32_VMX_TRUE_EXIT_CTLS:
     case MSR_IA32_VMX_TRUE_ENTRY_CTLS:
-        GuestState->Vcpu->MsrData[VMX_MSR( ecx )].QuadPart = MsrValue.QuadPart;
+    case MSR_IA32_VMX_VMFUNC:
         break;
 
     default:
@@ -552,16 +593,13 @@ VOID VmExitMTF( IN PGUEST_STATE GuestState )
         EptUpdateTableRecursive(
             pEPT, pEPT->PML4Ptr, EPT_TOP_LEVEL, 
             pHook->DataPagePFN, 
-            (pHook->Type == HOOK_SWAP ?  EPT_ACCESS_EXEC : EPT_ACCESS_NONE), 
+            EPT_ACCESS_EXEC, 
             pHook->CodePagePFN, 1 
             );
 
         // Rely on page cache if split method is used
-        if (pHook->Type != HOOK_SPLIT)
-        {
-            EPT_CTX ctx = { 0 };
-            __invept( INV_ALL_CONTEXTS, &ctx );
-        }
+        /*EPT_CTX ctx = { 0 };
+        __invept( INV_ALL_CONTEXTS, &ctx );*/
 
         Vcpu->HookDispatch.pEntry = NULL;
         Vcpu->HookDispatch.Rip = 0;

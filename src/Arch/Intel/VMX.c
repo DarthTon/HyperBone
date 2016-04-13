@@ -63,6 +63,49 @@ BOOLEAN VmxHardSupported()
 }
 
 /// <summary>
+/// Check various VMX features: ETP, VPID, VMFUNC, etc.
+/// </summary>
+VOID VmxCheckFeatures()
+{
+    IA32_VMX_BASIC_MSR basic = { 0 };
+    IA32_VMX_PROCBASED_CTLS_MSR ctl = { 0 };
+    IA32_VMX_PROCBASED_CTLS2_MSR ctl2 = { 0 };
+    IA32_VMX_EPT_VPID_CAP_MSR vpidcap = { 0 };
+
+    // True MSRs
+    basic.All = __readmsr( MSR_IA32_VMX_BASIC );
+    g_Data->Features.TrueMSRs = basic.Fields.VmxCapabilityHint;
+
+    // Secondary control
+    ctl.All = __readmsr( MSR_IA32_VMX_PROCBASED_CTLS );
+    g_Data->Features.SecondaryControls = ctl.Fields.ActivateSecondaryControl;
+
+    if (ctl.Fields.ActivateSecondaryControl)
+    {
+        // EPT, VPID, VMFUNC
+        ctl2.All = __readmsr( MSR_IA32_VMX_PROCBASED_CTLS2 );
+        g_Data->Features.EPT  = ctl2.Fields.EnableEPT;
+        g_Data->Features.VPID = ctl2.Fields.EnableVPID;
+        g_Data->Features.VMFUNC = ctl2.Fields.EnableVMFunctions;
+
+        if (ctl2.Fields.EnableEPT != 0)
+        {
+            // Execute only
+            vpidcap.All = __readmsr( MSR_IA32_VMX_EPT_VPID_CAP );
+            g_Data->Features.ExecOnlyEPT = vpidcap.Fields.ExecuteOnly;
+            g_Data->Features.InvSingleAddress = vpidcap.Fields.IndividualAddressInvVpid;
+
+            if (vpidcap.Fields.ExecuteOnly == 0)
+                DPRINT( "HyperBone: CPU %d: %s: No execute-only EPT translation support\n", CPU_IDX, __FUNCTION__ );
+        }
+        else
+            DPRINT( "HyperBone: CPU %d: %s: No EPT/VPID support\n", CPU_IDX, __FUNCTION__ );
+    }
+    else
+        DPRINT( "HyperBone: CPU %d: %s: No secondary contol support\n", CPU_IDX, __FUNCTION__ );
+}
+
+/// <summary>
 /// Inject interrupt or exception into guest
 /// </summary>
 /// <param name="InterruptType">INterrupt type</param>
@@ -179,9 +222,24 @@ VOID VmxSubvertCPU( IN PVCPU Vcpu )
     PHYSICAL_ADDRESS phys = { 0 };
     phys.QuadPart = MAXULONG64;
 
+    //
     // Initialize all the VMX-related MSRs by reading their value
-    for (ULONG i = 0; i < RTL_NUMBER_OF( Vcpu->MsrData ) - 1; i++)
+    //
+    for (ULONG i = 0; i <= VMX_MSR( MSR_IA32_VMX_VMCS_ENUM ); i++)
         Vcpu->MsrData[i].QuadPart = __readmsr( MSR_IA32_VMX_BASIC + i );
+
+    // Secondary controls, if present
+    if (g_Data->Features.SecondaryControls)
+        Vcpu->MsrData[VMX_MSR( MSR_IA32_VMX_PROCBASED_CTLS2 )].QuadPart = __readmsr( MSR_IA32_VMX_PROCBASED_CTLS2 );
+
+    // True MSRs, if present
+    if (g_Data->Features.TrueMSRs)
+        for (ULONG i = VMX_MSR( MSR_IA32_VMX_TRUE_PINBASED_CTLS ); i <= VMX_MSR( MSR_IA32_VMX_TRUE_ENTRY_CTLS ); i++)
+            Vcpu->MsrData[i].QuadPart = __readmsr( MSR_IA32_VMX_BASIC + i );
+
+    // VMFUNC, if present
+    if(g_Data->Features.VMFUNC)
+        Vcpu->MsrData[VMX_MSR( MSR_IA32_VMX_VMFUNC )].QuadPart = __readmsr( MSR_IA32_VMX_VMFUNC );
 
     Vcpu->VMXON    = MmAllocateContiguousMemory( sizeof( VMX_VMCS ), phys );
     Vcpu->VMCS     = MmAllocateContiguousMemory( sizeof( VMX_VMCS ), phys );
@@ -208,7 +266,7 @@ VOID VmxSubvertCPU( IN PVCPU Vcpu )
         VmxSetupVMCS( Vcpu );
 
         // Setup EPT
-        if(g_Data->EPTSupported)
+        if(g_Data->Features.EPT)
         {
             if (!NT_SUCCESS( EptBuildIdentityMap( &Vcpu->EPT ) ))
             {
@@ -413,9 +471,11 @@ VOID VmxSetupVMCS( IN PVCPU VpData )
     // want to activate the MSR bitmap in order to keep them from being caught.
     vmCpuCtlRequested.Fields.UseMSRBitmaps = TRUE;
     vmCpuCtlRequested.Fields.ActivateSecondaryControl = TRUE;
+    //vmCpuCtlRequested.Fields.UseTSCOffseting = TRUE;
+    //vmCpuCtlRequested.Fields.RDTSCExiting = TRUE;
 
     // VPID caches must be invalidated on CR3 change
-    if(g_Data->VPIDSpported)
+    if(g_Data->Features.VPID)
         vmCpuCtlRequested.Fields.CR3LoadExiting = TRUE;
 
     // Enable support for RDTSCP and XSAVES/XRESTORES in the guest. Windows 10
@@ -451,7 +511,7 @@ VOID VmxSetupVMCS( IN PVCPU VpData )
 
     // Load the MSR bitmap. Unlike other bitmaps, not having an MSR bitmap will
     // trap all MSRs, so have to allocate an empty one.
-    PUCHAR bitMapReadLow = g_Data->MSRBitmap;      // 0x00000000 - 0x00001FFF
+    PUCHAR bitMapReadLow = g_Data->MSRBitmap;       // 0x00000000 - 0x00001FFF
     PUCHAR bitMapReadHigh = bitMapReadLow + 1024;   // 0xC0000000 - 0xC0001FFF
 
     RTL_BITMAP bitMapReadLowHeader = { 0 };
@@ -459,8 +519,9 @@ VOID VmxSetupVMCS( IN PVCPU VpData )
     RtlInitializeBitMap( &bitMapReadLowHeader, (PULONG)bitMapReadLow, 1024 * 8 );
     RtlInitializeBitMap( &bitMapReadHighHeader, (PULONG)bitMapReadHigh, 1024 * 8 );
 
-    RtlSetBit( &bitMapReadLowHeader,  MSR_IA32_DEBUGCTL );          // DEBUGCTL
-    RtlSetBit( &bitMapReadHighHeader, MSR_LSTAR - 0xC0000000 );     // LSTAR
+    RtlSetBit( &bitMapReadLowHeader, MSR_IA32_FEATURE_CONTROL );    // MSR_IA32_FEATURE_CONTROL
+    RtlSetBit( &bitMapReadLowHeader,  MSR_IA32_DEBUGCTL );          // MSR_DEBUGCTL
+    RtlSetBit( &bitMapReadHighHeader, MSR_LSTAR - 0xC0000000 );     // MSR_LSTAR
 
     // VMX MSRs
     for (ULONG i = MSR_IA32_VMX_BASIC; i <= MSR_IA32_VMX_VMFUNC; i++)

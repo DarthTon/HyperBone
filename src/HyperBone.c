@@ -4,6 +4,8 @@
 #include "Util/Utils.h"
 #include "Test/Tests.h"
 
+#include <intrin.h>
+
 NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING registryPath );
 VOID     HBUnload( IN PDRIVER_OBJECT DriverObject );
 
@@ -92,6 +94,7 @@ VOID FreeGlobalData( IN PGLOBAL_DATA pData )
     ExFreePoolWithTag( pData, HB_POOL_TAG );
 }
 
+
 /*
 */
 NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath )
@@ -99,12 +102,14 @@ NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registr
     NTSTATUS status = STATUS_SUCCESS;
     UNREFERENCED_PARAMETER( RegistryPath );
 
+    // Check hardware support
     if (!HvmIsHVSupported())
     {
         DPRINT( "HyperBone: CPU %d: %s: VMX/AMD-V is not supported, aborting\n", CPU_IDX, __FUNCTION__ );
         return STATUS_HV_FEATURE_UNAVAILABLE;
     }
 
+    // Initialize internal structures
     if (UtilSSDTEntry( 0 ) == 0)
     {
         DPRINT( "HyperBone: CPU %d: %s: Failed to Get SSDT/Kernel base, can't continue\n", CPU_IDX, __FUNCTION__ );
@@ -118,12 +123,16 @@ NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registr
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
+    // Get physical memory regions
     if (!NT_SUCCESS( UtilQueryPhysicalMemory() ))
     {
         DPRINT( "HyperBone: CPU %d: %s: Failed to query physical memory ranges\n", CPU_IDX, __FUNCTION__ );
         FreeGlobalData( g_Data );
         return STATUS_UNSUCCESSFUL;
     }
+
+    // Fill available CPU features
+    HvmCheckFeatures();
 
     DPRINT( "HyperBone: CPU %d: %s: Subverting started...\n", CPU_IDX, __FUNCTION__ );
     if (!NT_SUCCESS( StartHV() ))
@@ -132,10 +141,10 @@ NTSTATUS DriverEntry( IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING Registr
         FreeGlobalData( g_Data );
         return STATUS_UNSUCCESSFUL;
     }
-
     DPRINT( "HyperBone: CPU %d: %s: Subverting finished\n", CPU_IDX, __FUNCTION__ );
 
-    TestStart( FALSE, FALSE, TRUE );
+    TestStart( TRUE, TRUE, TRUE );
+
     DriverObject->DriverUnload = HBUnload;  
     return status;
 }

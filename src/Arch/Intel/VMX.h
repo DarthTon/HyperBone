@@ -312,6 +312,11 @@ typedef struct _GUEST_STATE
 BOOLEAN VmxHardSupported();
 
 /// <summary>
+/// Check various VMX features: ETP, VPID, VMFUNC, etc.
+/// </summary>
+VOID VmxCheckFeatures();
+
+/// <summary>
 /// Virtualize LP
 /// </summary>
 /// <param name="Vcpu">Virtual CPU data</param>

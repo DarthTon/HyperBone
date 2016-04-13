@@ -11,7 +11,6 @@ typedef struct _HOOK_CONTEXT
     BOOLEAN Hook;           // TRUE to hook page, FALSE to unhook
     ULONG64 DataPagePFN;    // Physical data page PFN
     ULONG64 CodePagePFN;    // Physical code page PFN
-    HOOK_TYPE Type;         // Hook Type
 } HOOK_CONTEXT, *PHOOK_CONTEXT;
 
 #pragma pack(push, 1)
@@ -54,7 +53,7 @@ VOID PHpHookCallbackDPC( IN PRKDPC Dpc, IN PVOID Context, IN PVOID SystemArgumen
     PHOOK_CONTEXT pCTX = (PHOOK_CONTEXT)Context;
 
     if (pCTX != NULL)
-        __vmx_vmcall( pCTX->Hook ? HYPERCALL_HOOK_PAGE : HYPERCALL_UNHOOK_PAGE, pCTX->DataPagePFN, pCTX->CodePagePFN, pCTX->Type );
+        __vmx_vmcall( pCTX->Hook ? HYPERCALL_HOOK_PAGE : HYPERCALL_UNHOOK_PAGE, pCTX->DataPagePFN, pCTX->CodePagePFN, 0 );
 
     KeSignalCallDpcSynchronize( SystemArgument2 );
     KeSignalCallDpcDone( SystemArgument1 );
@@ -138,7 +137,7 @@ NTSTATUS PHpCopyCode( IN PVOID pFunc, OUT PUCHAR OriginalStore, OUT PULONG pSize
 /// <param name="pHook">Hook address</param>
 /// /// <param name="Type">Hook type</param>
 /// <returns>Status code</returns>
-NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
+NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook )
 {
     PUCHAR CodePage = NULL;
     BOOLEAN Newpage = FALSE;
@@ -146,7 +145,7 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
     phys.QuadPart = MAXULONG64;
 
     // No CPU support
-    if (!g_Data->EPTSupported || !g_Data->EPTExecOnlySupported)
+    if (!g_Data->Features.EPT || !g_Data->Features.ExecOnlyEPT)
         return STATUS_NOT_SUPPORTED;
 
     // Check if page is already hooked
@@ -186,7 +185,6 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
     PHpInitJumpThunk( &thunk, (ULONG64)pHook );
     memcpy( CodePage + page_offset, &thunk, sizeof( thunk ) );
 
-    pHookEntry->Type = Type;
     pHookEntry->OriginalPtr = pFunc;
     pHookEntry->DataPageVA = PAGE_ALIGN( pFunc );
     pHookEntry->DataPagePFN = PFN( MmGetPhysicalAddress( pFunc ).QuadPart );
@@ -205,7 +203,6 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
         ctx.Hook = TRUE;
         ctx.DataPagePFN = pHookEntry->DataPagePFN;
         ctx.CodePagePFN = pHookEntry->CodePagePFN;
-        ctx.Type = Type;
 
         KeGenericCallDpc( PHpHookCallbackDPC, &ctx );
     }
@@ -221,7 +218,7 @@ NTSTATUS PHHook( IN PVOID pFunc, IN PVOID pHook, IN HOOK_TYPE Type )
 NTSTATUS PHRestore( IN PVOID pFunc )
 {
     // No CPU support
-    if (!g_Data->EPTExecOnlySupported)
+    if (!g_Data->Features.ExecOnlyEPT)
         return STATUS_NOT_SUPPORTED;
 
     PPAGE_HOOK_ENTRY pHookEntry = PHGetHookEntry( pFunc );
@@ -242,7 +239,6 @@ NTSTATUS PHRestore( IN PVOID pFunc )
         ctx.Hook = FALSE;
         ctx.DataPagePFN = pHookEntry->DataPagePFN;
         ctx.CodePagePFN = pHookEntry->CodePagePFN;;
-        ctx.Type = pHookEntry->Type;
 
         KeGenericCallDpc( PHpHookCallbackDPC, &ctx );
     }
