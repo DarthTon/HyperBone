@@ -63,7 +63,7 @@ BOOLEAN VmxHardSupported()
 }
 
 /// <summary>
-/// Check various VMX features: ETP, VPID, VMFUNC, etc.
+/// Check various VMX features: EPT, VPID, VMFUNC, etc.
 /// </summary>
 VOID VmxCheckFeatures()
 {
