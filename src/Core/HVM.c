@@ -109,12 +109,43 @@ NTSTATUS StartHV()
 /// <returns>Status code</returns>
 NTSTATUS StopHV()
 {
-    // Unknown CPU
-    if (g_Data->CPUVendor == CPU_Other)
-        return STATUS_NOT_SUPPORTED;
+	// Unknown CPU
+	if (g_Data->CPUVendor == CPU_Other)
+		return STATUS_NOT_SUPPORTED;
 
-    KeGenericCallDpc( HvmpHVCallbackDPC, NULL );
+	//KeGenericCallDpc( HvmpHVCallbackDPC, NULL ); there will be Dead Lock
 
-    return STATUS_SUCCESS;
+
+	//unload from HyperPlatform and they are works
+	ULONG number_of_processors = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+	for (ULONG processor_index = 0; processor_index < number_of_processors; processor_index++) {
+		PROCESSOR_NUMBER processor_number;
+		RtlZeroMemory(&processor_number, sizeof(PROCESSOR_NUMBER));
+		NTSTATUS status = KeGetProcessorNumberFromIndex(processor_index, &processor_number);
+		if (!NT_SUCCESS(status))
+		{
+			DbgBreakPoint();
+		}
+
+		// Switch the current processor
+		GROUP_AFFINITY affinity;
+		RtlZeroMemory(&affinity, sizeof(GROUP_AFFINITY));
+		affinity.Group = processor_number.Group;
+		affinity.Mask = 1ull << processor_number.Number;
+		GROUP_AFFINITY previous_affinity;
+		RtlZeroMemory(&affinity, sizeof(GROUP_AFFINITY));
+		KeSetSystemGroupAffinityThread(&affinity, &previous_affinity);
+
+		PVCPU pVCPU = &g_Data->cpu_data[processor_index];
+		IntelRestoreCPU(pVCPU);//todo amd vmoff???黑人问号?
+
+		KeRevertToUserGroupAffinityThread(&previous_affinity);
+		if (!NT_SUCCESS(status))
+		{
+			DbgBreakPoint();
+		}
+	}
+
+	return STATUS_SUCCESS;
 }
 
