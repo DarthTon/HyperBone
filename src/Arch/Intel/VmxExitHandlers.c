@@ -178,7 +178,7 @@ DECLSPEC_NORETURN EXTERN_C VOID VmxpExitHandler( IN PCONTEXT Context )
     }
 
     KeLowerIrql( guestContext.GuestIrql );
-    RtlRestoreContext( Context, NULL );
+    VmRestoreContext( Context );
 }
 
 /// <summary>
