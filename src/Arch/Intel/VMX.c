@@ -170,7 +170,7 @@ VOID VmxInitializeCPU( IN PVCPU Vcpu, IN ULONG64 SystemDirectoryTableBase )
         // per-VP data this way, the compiler will continue to generate non-
         // optimized accesses, guaranteeing that no previous register state
         // will be used.
-        RtlRestoreContext( &g_Data->cpu_data[CPU_IDX].HostState.ContextFrame, NULL );
+        VmRestoreContext( &g_Data->cpu_data[CPU_IDX].HostState.ContextFrame );
     }
     // If we are in this branch comparison, it means that we have not yet
     // attempted to launch the VM, nor that we have launched it. In other
