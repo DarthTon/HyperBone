@@ -345,6 +345,8 @@ inline VOID ToggleMTF( IN BOOLEAN State )
 //
 // Implemented in VMXa.asm
 //
+
+VOID VmRestoreContext(CONTEXT* _Context); // currently compatible with RtlCaptureContext() function. use instead of RtlRestoreContext() function to not BSOD on Win10 15063+ builds due to RSP checks.
 VOID VmxpResume();
 VOID VmxVMEntry();
 VOID VmxVMCleanup( IN USHORT Data, IN USHORT Teb );
